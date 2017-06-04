@@ -1,10 +1,6 @@
 rm(list=ls())
 
-img_path <- "./data/train_extra"
-read_dir_name <- "train_extra"
-write_dir_name <- "train_extra_resized"
-width  <- 256
-height <- 256
+img_path <- "./data/train_extra_resized"
 
 #source("https://bioconductor.org/biocLite.R")
 #biocLite("EBImage")
@@ -19,7 +15,14 @@ for(i in 1:n_img) {
   message(sprintf("Writing image %d out of %d\n", i, n_img))
   img_file_name <- img_file_list[i]
   img <- readImage(img_file_name)
-  img_resized <- resize(img, w=width, h=height)
-  new_file_name <- gsub(read_dir_name, write_dir_name, img_file_name)
-  writeImage(img_resized, new_file_name, quality = 85)
+  # rotate right
+  angle <- runif(1, 5.0, 10.0)
+  new_img <- rotate(img, angle)
+  new_file_name <- gsub(".jpg", "rr.jpg", img_file_name)
+  writeImage(new_img, new_file_name)
+  # rotate left
+  angle <- runif(1, 5.0, 10.0)
+  new_img <- rotate(img, -angle)
+  new_file_name <- gsub(".jpg", "rl.jpg", img_file_name)
+  writeImage(new_img, new_file_name)
 }
