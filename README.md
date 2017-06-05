@@ -14,5 +14,5 @@ Using OVO or OVA
 
 ### CNNs + others classifiers (SVM, Boosting)
 
-* Feature extraction from a previously trained neural network
-* Feature extraction from an own neural network
+* CNN feature maps from a previously trained neural network
+* CNN feature maps from an own neural network
