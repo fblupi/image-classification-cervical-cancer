@@ -6,6 +6,7 @@ library(EBImage)
 library(gsubfn)
 require(mxnet)
 require(nnet)
+library(dplyr)
 
 #-------------------------------------------------------------------------------
 # Load and pre-process images
@@ -14,16 +15,18 @@ require(nnet)
 # Set run parameters parameters
 train_img_path <- "./data/train_resized"
 test_img_path <- "./data/test_resized"
+train_rds <- "./rds/images-train_extra_resized-64x64.rds"
+test_rds <- "./rds/images-test-64x64.rds"
 width  <- 64
 height <- 64
+num_train <- 1394
 file_postfix <- paste("__", format(Sys.time(), "%d-%m-%y_%H-%M-%S"), sep = "")
-training_rounds <- 10
 
 create_train <- FALSE
 create_test <- FALSE
 
 #-------------------------------------------------------------------------------
-# Load and pre-process train images
+# Load and pre-process train and test images
 #-------------------------------------------------------------------------------
 
 # Train
@@ -51,7 +54,7 @@ if(create_train) {
   
   saveRDS(object = train_df, file = paste("images-train-", width, "x", height, file_postfix, ".rds", sep=""))
 } else {
-  train_df <- readRDS("./rds/images-train_extra_resized-64x64.rds")
+  train_df <- readRDS(train_rds)
 }
 
 # Test
@@ -78,15 +81,23 @@ if (create_test) {
   
   saveRDS(object = test_df, file = paste("images-test-", width, "x", height, file_postfix, ".rds", sep=""))
 } else {
-  test_df <- readRDS("./rds/images-test-64x64.rds")
+  test_df <- readRDS(test_rds)
 }
 
 #-------------------------------------------------------------------------------
 # Prepare training and validation sets
 #-------------------------------------------------------------------------------
 
+# Undersample for balanced classes
+train_undersample <- train_df %>%
+  group_by(label) %>%
+  sample_n(num_train) %>%
+  ungroup() %>%
+  sample_frac(1) %>%
+  sample_frac(1)
+
 # Build training matrix
-train <- data.matrix(train_df)
+train <- data.matrix(train_undersample)
 train_x <- t(train[, -1]) 
 train_y <- train[, 1]
 train_array <- train_x 
@@ -165,7 +176,7 @@ model <- mx.model.FeedForward.create(NN_model,
                                      X = train_array,
                                      y = train_y,
                                      ctx = mx.cpu(),
-                                     num.round = training_rounds,
+                                     num.round = 10,
                                      array.batch.size = length(train_y),
                                      learning.rate = 0.1,
                                      momentum = 0.005,
