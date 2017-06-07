@@ -1,6 +1,12 @@
 # Clear workspace
 rm(list=ls())
 
+# Load libraries
+library(EBImage)
+library(gsubfn)
+require(mxnet)
+require(nnet)
+
 #-------------------------------------------------------------------------------
 # Load and pre-process images
 #-------------------------------------------------------------------------------
@@ -8,10 +14,10 @@ rm(list=ls())
 # Set run parameters parameters
 train_img_path <- "./data/train_resized"
 test_img_path <- "./data/test_resized"
-width  <- 100
-height <- 100
+width  <- 64
+height <- 64
 file_postfix <- paste("__", format(Sys.time(), "%d-%m-%y_%H-%M-%S"), sep = "")
-training_rounds <- 50
+training_rounds <- 10
 
 create_train <- FALSE
 create_test <- FALSE
@@ -19,12 +25,6 @@ create_test <- FALSE
 #-------------------------------------------------------------------------------
 # Load and pre-process train images
 #-------------------------------------------------------------------------------
-
-# Load EBImage library
-library(EBImage)
-
-# Load images into a dataframe
-library(gsubfn)
 
 # Train
 if(create_train) {
@@ -51,7 +51,7 @@ if(create_train) {
   
   saveRDS(object = train_df, file = paste("images-train-", width, "x", height, file_postfix, ".rds", sep=""))
 } else {
-  train_df <- readRDS("./rds/images-train_resized-100x100__05-06-17_19-04-19.rds")
+  train_df <- readRDS("./rds/images-train_extra_resized-64x64.rds")
 }
 
 # Test
@@ -78,15 +78,8 @@ if (create_test) {
   
   saveRDS(object = test_df, file = paste("images-test-", width, "x", height, file_postfix, ".rds", sep=""))
 } else {
-  test_df <- readRDS("./rds/images-test-100x100__05-06-17_19-04-19.rds")
+  test_df <- readRDS("./rds/images-test-64x64.rds")
 }
-
-#-------------------------------------------------------------------------------
-# Setup mxnetR
-#-------------------------------------------------------------------------------
-
-# Load mxnetR library
-require(mxnet)
 
 #-------------------------------------------------------------------------------
 # Prepare training and validation sets
@@ -110,21 +103,19 @@ dim(test_array) <- c(width, height, 3, ncol(test_x))
 #-------------------------------------------------------------------------------
 data <- mx.symbol.Variable('data')
 
-# 1st convolutional layer
-conv_1 <- mx.symbol.Convolution(data = data, kernel = c(5, 5), num_filter = 20)
-tanh_1 <- mx.symbol.Activation(data = conv_1, act_type = "tanh")
-pool_1 <- mx.symbol.Pooling(data = tanh_1, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
-# 2nd convolutional layer
-conv_2 <- mx.symbol.Convolution(data = pool_1, kernel = c(5, 5), num_filter = 50)
-tanh_2 <- mx.symbol.Activation(data = conv_2, act_type = "tanh")
-pool_2 <- mx.symbol.Pooling(data=tanh_2, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
-# 1st fully connected layer
+conv_1 <- mx.symbol.Convolution(data = data, kernel = c(3, 3), num_filter = 3)
+relu_1 <- mx.symbol.Activation(data = conv_1, act_type = "relu")
+pool_1 <- mx.symbol.Pooling(data = relu_1, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
+
+conv_2 <- mx.symbol.Convolution(data = pool_1, kernel = c(3, 3), num_filter = 14)
+relu_2 <- mx.symbol.Activation(data = conv_2, act_type = "relu")
+pool_2 <- mx.symbol.Pooling(data = relu_2, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
+
 flatten <- mx.symbol.Flatten(data = pool_2)
-fc_1 <- mx.symbol.FullyConnected(data = flatten, num_hidden = 500)
-tanh_3 <- mx.symbol.Activation(data = fc_1, act_type = "tanh")
-# 2nd fully connected layer
-fc_2 <- mx.symbol.FullyConnected(data = tanh_3, num_hidden = 3)  # 40 in original example, since there are 40 subjects
-# Output. Softmax output since we'd like to get some probabilities.
+fc_1 <- mx.symbol.FullyConnected(data = flatten, num_hidden = 84)
+relu_3 <- mx.symbol.Activation(data = fc_1, act_type = "relu")
+
+fc_2 <- mx.symbol.FullyConnected(data = relu_3, num_hidden = 3)
 NN_model <- mx.symbol.SoftmaxOutput(data = fc_2)
 
 #-------------------------------------------------------------------------------
@@ -134,25 +125,54 @@ NN_model <- mx.symbol.SoftmaxOutput(data = fc_2)
 # Set seed for reproducibility
 mx.set.seed(100)
 
-# Device used. CPU in my case (using the R version )
-devices <- mx.cpu()
+# LogLoss func
+mLogLoss.normalize = function(p, min_eta=1e-15, max_eta = 1.0){
+  for(ix in 1:dim(p)[2]) {
+    p[,ix] = ifelse(p[,ix]<=min_eta,min_eta,p[,ix]);
+    p[,ix] = ifelse(p[,ix]>=max_eta,max_eta,p[,ix]);
+  }
+  for(ix in 1:dim(p)[1]) {
+    p[ix,] = p[ix,] / sum(p[ix,]);
+  }
+  return(p);
+}
+
+mlogloss = function(y, p, min_eta=1e-15,max_eta = 1.0){
+  class_loss = c(dim(p)[2]);
+  loss = 0;
+  p = mLogLoss.normalize(p,min_eta, max_eta);
+  for(ix in 1:dim(y)[2]) {
+    p[,ix] = ifelse(p[,ix]>1,1,p[,ix]);
+    class_loss[ix] = sum(y[,ix]*log(p[,ix]));
+    loss = loss + class_loss[ix];
+  }
+  return (list("loss"=-1*loss/dim(p)[1],"class_loss"=class_loss));
+}
+
+mx.metric.mlogloss <- mx.metric.custom("mlogloss", function(label, pred){
+  p = t(pred);
+  m = mlogloss(class.ind(label),p);
+  gc();
+  return(m$loss);
+})
 
 #-------------------------------------------------------------------------------
 # Training
 #-------------------------------------------------------------------------------
 
 # Train the model
-img_file_list <- list.files(path = train_img_path, pattern = "*.png", full.names = TRUE, recursive = TRUE)
 model <- mx.model.FeedForward.create(NN_model,
                                      X = train_array,
                                      y = train_y,
-                                     ctx = devices,
+                                     ctx = mx.cpu(),
                                      num.round = training_rounds,
-                                     array.batch.size = length(img_file_list), # 40 in the original example, number of subjects of the experiment
-                                     learning.rate = 0.01,
-                                     momentum = 0.5,
-                                     eval.metric = mx.metric.accuracy,
-                                     epoch.end.callback = mx.callback.log.train.metric(100))
+                                     array.batch.size = length(train_y),
+                                     learning.rate = 0.1,
+                                     momentum = 0.005,
+                                     wd = 0.004,
+                                     initializer=mx.init.uniform(0.07),
+                                     eval.metric = mx.metric.mlogloss,
+                                     batch.end.callback = mx.callback.log.train.metric(10))
 
 saveRDS(object = model, file = paste("FFmodel", file_postfix, ".rds", sep=""))
 graph.viz(model$symbol)
@@ -166,7 +186,7 @@ predicted <- predict(model, train_array)
 # Assign labels
 predicted_labels <- max.col(t(predicted))
 # Get accuracy
-sum(diag(table(train[, 1], predicted_labels)))/length(img_file_list)
+sum(diag(table(train[, 1], predicted_labels)))/length(train_y)
 
 #-------------------------------------------------------------------------------
 # Testing (using the test set)
