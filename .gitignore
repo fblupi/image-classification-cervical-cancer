@@ -34,3 +34,5 @@ vignettes/*.pdf
 
 data/
 rds/
+npy/
+.idea/

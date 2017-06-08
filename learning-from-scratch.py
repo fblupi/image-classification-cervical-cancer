@@ -1,18 +1,49 @@
-import pandas as pd
-import glob
 import cv2
+import glob
 import numpy as np
-from multiprocessing import Pool, cpu_count, freeze_support
-from keras.wrappers.scikit_learn import KerasClassifier
+import pandas as pd
+
+from keras.layers.core import Dense, Dropout, Flatten
+from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Flatten, Activation
-from keras.layers.convolutional import Conv2D, ZeroPadding2D, MaxPooling2D
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from keras.preprocessing.image import ImageDataGenerator
+from multiprocessing import Pool, cpu_count, freeze_support
+from PIL import Image
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
+SEP = "\\"
+
+SEED = 14
+
+RESIZE_TRAIN_IMAGES = False
+RESIZE_TEST_IMAGES = False
+
+TRAIN_IMAGES_FOLDER = "train_extra_resized"
+TEST_IMAGES_FOLDER = "test_resized"
 SIZE = 128
-EPOCHS = 20
-BATCH = 15
+
+BATCH_SIZE = 20
+NUM_EPOCHS = 50
+
+
+def im_multi(path):
+    try:
+        im_stats_im_ = Image.open(path)
+        return [path, {'size': im_stats_im_.size}]
+    except:
+        print(path)
+        return [path, {'size': [0, 0]}]
+
+
+def im_stats(im_stats_df):
+    im_stats_d = {}
+    p = Pool(cpu_count())
+    ret = p.map(im_multi, im_stats_df['path'])
+    for i in range(len(ret)):
+        im_stats_d[ret[i][0]] = ret[i][1]
+    im_stats_df['size'] = im_stats_df['path'].map(lambda x: ' '.join(str(s) for s in im_stats_d[x]['size']))
+    return im_stats_df
 
 
 def get_im_cv2(path):
@@ -27,6 +58,7 @@ def normalize_image_features(paths):
     ret = p.map(get_im_cv2, paths)
     for i in range(len(ret)):
         imf_d[ret[i][0]] = ret[i][1]
+    ret = []
     fdata = [imf_d[f] for f in paths]
     fdata = np.array(fdata, dtype=np.uint8)
     fdata = fdata.transpose((0, 3, 1, 2))
@@ -35,49 +67,86 @@ def normalize_image_features(paths):
     return fdata
 
 
-def create_model(opt_):
+def create_model(opt_='adamax'):
     model = Sequential()
-    model.add(ZeroPadding2D((1, 1), input_shape=(3, SIZE, SIZE)))
-    model.add(Conv2D(8, (3, 3)))
+    model.add(Conv2D(4, (3, 3), activation='relu', data_format='channels_first', input_shape=(3, SIZE, SIZE)))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), data_format='channels_first'))
+    model.add(Conv2D(8, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), data_format='channels_first'))
     model.add(Dropout(0.2))
-    model.add(Dense(12))
-    model.add(Dropout(0.2))
-    model.add(Dense(6))
+
     model.add(Flatten())
+    model.add(Dense(12, activation='tanh'))
+    model.add(Dropout(0.1))
     model.add(Dense(3, activation='softmax'))
+
     model.compile(optimizer=opt_, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     return model
 
 
 def main():
-    train = glob.glob(".\\data\\train_extra_resized\\**\\*.jpg")
-    train = pd.DataFrame([[p.split('\\')[3], p.split('\\')[4], p] for p in train], columns=['type', 'image', 'path'])
-    test = glob.glob(".\\data\\test_resized\\*.jpg")
-    test = pd.DataFrame([[p.split('\\')[3], p] for p in test], columns=['image', 'path'])
+    if RESIZE_TRAIN_IMAGES:
+        print("Reading train data from image files...")
+        train = glob.glob("." + SEP + "data" + SEP + TRAIN_IMAGES_FOLDER + SEP + "**" + SEP + "*.jpg")
+        train = pd.DataFrame([[p.split(SEP)[3], p.split(SEP)[4], p] for p in train], columns=['type', 'image', 'path'])
+        train = im_stats(train)
+        train = train[train['size'] != '0 0'].reset_index(drop=True)
+        train_data = normalize_image_features(train['path'])
+        np.save("." + SEP + "npy" + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
+                train_data, allow_pickle=True, fix_imports=True)
 
-    train_data = normalize_image_features(train['path'])
-    test_data = normalize_image_features(test['path'])
+        le = LabelEncoder()
+        train_target = le.fit_transform(train['type'].values)
+        np.save("." + SEP + "npy" + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '-target.npy',
+                train_target, allow_pickle=True, fix_imports=True)
+    else:
+        print("Reading train data from NPY files...")
+        train_data = np.load("." + SEP + "npy" + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
+                             allow_pickle=True, fix_imports=True)
+        train_target = np.load("." + SEP + "npy" + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '-target.npy',
+                               allow_pickle=True, fix_imports=True)
 
-    print("Images have been successfully read")
+    if RESIZE_TEST_IMAGES:
+        print("Reading test data from image files...")
+        test = glob.glob("." + SEP + "data" + SEP + TEST_IMAGES_FOLDER + SEP + "*.jpg")
+        test = pd.DataFrame([[p.split(SEP)[3], p] for p in test], columns=['image', 'path'])
+        test_data = normalize_image_features(test['path'])
+        np.save("." + SEP + "npy" + SEP + TEST_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
+                test_data, allow_pickle=True, fix_imports=True)
 
-    le = LabelEncoder()
-    train_target = le.fit_transform(train['type'].values)
+        test_id = test.image.values
+        np.save("." + SEP + "npy" + SEP + TEST_IMAGES_FOLDER + '-' + str(SIZE) + '-label.npy',
+                test_id, allow_pickle=True, fix_imports=True)
+    else:
+        print("Reading test data from NPY files...")
+        test_data = np.load("." + SEP + "npy" + SEP + TEST_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
+                            allow_pickle=True, fix_imports=True)
+        test_id = np.load("." + SEP + "npy" + SEP + TEST_IMAGES_FOLDER + '-' + str(SIZE) + '-label.npy',
+                          allow_pickle=True, fix_imports=True)
 
-    model = KerasClassifier(build_fn=create_model, nb_epoch=EPOCHS, batch_size=BATCH, verbose=2)
+    np.random.seed(SEED)  # for reproducibility
 
-    opts_ = ['adamax']  # ['adadelta','sgd','adagrad','adam','adamax']
-    epochs = np.array([EPOCHS])
-    batches = np.array([BATCH])
-    param_grid = dict(nb_epoch=epochs, batch_size=batches, opt_=opts_)
-    grid = GridSearchCV(estimator=model, cv=StratifiedKFold(n_splits=2), param_grid=param_grid, verbose=20)
-    grid_result = grid.fit(train_data, train_target)
+    print("Generating validation data...")
+    x_train, x_val_train, y_train, y_val_train = train_test_split(train_data, train_target,
+                                                                  test_size=0.4, random_state=SEED)
 
-    test_id = test.image.values
+    print("Data augmentation...")
+    datagen = ImageDataGenerator(rotation_range=0.3, zoom_range=0.3, data_format="channels_first")
+    datagen.fit(train_data)
 
-    pred = grid_result.predict_proba(test_data)
-    df = pd.DataFrame(pred, columns=le.classes_)
+    print("Training model...")
+    model = create_model()
+    model.fit_generator(generator=datagen.flow(x_train, y_train, shuffle=True),
+                        validation_data=(x_val_train, y_val_train),
+                        verbose=2, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
+
+    print("Predicting...")
+    pred = model.predict_proba(test_data)
+
+    print("Exporting to CSV...")
+    df = pd.DataFrame(pred, columns=['Type_1', 'Type_2', 'Type_3'])
     df['image_name'] = test_id
-    df.to_csv('submission-keras.csv', index=False)
+    df.to_csv('submission.csv', index=False)
 
 
 if __name__ == '__main__':
