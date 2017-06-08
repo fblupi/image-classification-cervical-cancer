@@ -16,7 +16,7 @@ library(dplyr)
 train_img_path <- "./data/train_resized"
 test_img_path <- "./data/test_resized"
 train_rds <- "./rds/images-train_extra_resized-64x64.rds"
-test_rds <- "./rds/images-test-64x64.rds"
+test_rds <- "./rds/images-test_resized-64x64.rds"
 width  <- 64
 height <- 64
 num_train <- 1394
@@ -112,29 +112,6 @@ dim(test_array) <- c(width, height, 3, ncol(test_x))
 #-------------------------------------------------------------------------------
 # Set up the symbolic model
 #-------------------------------------------------------------------------------
-data <- mx.symbol.Variable('data')
-
-conv_1 <- mx.symbol.Convolution(data = data, kernel = c(3, 3), num_filter = 3)
-relu_1 <- mx.symbol.Activation(data = conv_1, act_type = "relu")
-pool_1 <- mx.symbol.Pooling(data = relu_1, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
-
-conv_2 <- mx.symbol.Convolution(data = pool_1, kernel = c(3, 3), num_filter = 14)
-relu_2 <- mx.symbol.Activation(data = conv_2, act_type = "relu")
-pool_2 <- mx.symbol.Pooling(data = relu_2, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
-
-flatten <- mx.symbol.Flatten(data = pool_2)
-fc_1 <- mx.symbol.FullyConnected(data = flatten, num_hidden = 84)
-relu_3 <- mx.symbol.Activation(data = fc_1, act_type = "relu")
-
-fc_2 <- mx.symbol.FullyConnected(data = relu_3, num_hidden = 3)
-NN_model <- mx.symbol.SoftmaxOutput(data = fc_2)
-
-#-------------------------------------------------------------------------------
-# Pre-training set up
-#-------------------------------------------------------------------------------
-
-# Set seed for reproducibility
-mx.set.seed(100)
 
 # LogLoss func
 mLogLoss.normalize = function(p, min_eta=1e-15, max_eta = 1.0){
@@ -167,6 +144,61 @@ mx.metric.mlogloss <- mx.metric.custom("mlogloss", function(label, pred){
   return(m$loss);
 })
 
+data <- mx.symbol.Variable('data')
+
+conv_1 <- mx.symbol.Convolution(data = data, kernel = c(11, 11), num_filter = 16)
+relu_1 <- mx.symbol.Activation(data = conv_1, act_type = "relu")
+
+conv_2 <- mx.symbol.Convolution(data = relu_1, kernel = c(7, 7), num_filter = 32)
+relu_2 <- mx.symbol.Activation(data = conv_2, act_type = "relu")
+pool_2 <- mx.symbol.Pooling(data = relu_2, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
+
+conv_3 <- mx.symbol.Convolution(data = pool_2, kernel = c(5, 5), num_filter = 64)
+relu_3 <- mx.symbol.Activation(data = conv_3, act_type = "relu")
+pool_3 <- mx.symbol.Pooling(data = relu_3, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
+
+conv_4 <- mx.symbol.Convolution(data = pool_3, kernel = c(3, 3), num_filter = 32)
+relu_4 <- mx.symbol.Activation(data = conv_4, act_type = "relu")
+
+conv_5 <- mx.symbol.Convolution(data = relu_4, kernel = c(3, 3), num_filter = 16)
+relu_5 <- mx.symbol.Activation(data = conv_5, act_type = "relu")
+
+conv_6 <- mx.symbol.Convolution(data = relu_5, kernel = c(3, 3), num_filter = 8)
+relu_6 <- mx.symbol.Activation(data = conv_6, act_type = "relu")
+pool_6 <- mx.symbol.Pooling(data = relu_6, pool_type = "max", kernel = c(2, 2), stride = c(2, 2))
+
+flatten <- mx.symbol.Flatten(data = pool_6)
+fc_7 <- mx.symbol.FullyConnected(data = flatten, num_hidden = 1024)
+relu_7 <- mx.symbol.Dropout(data = fc_7, p = 0.5)
+
+fc_8 <- mx.symbol.FullyConnected(data = relu_7, num_hidden = 256)
+relu_8 <- mx.symbol.Dropout(data = fc_8, p = 0.5)
+
+fc_9 <- mx.symbol.FullyConnected(data = relu_8, num_hidden = 64)
+relu_9 <- mx.symbol.Dropout(data = fc_9, p = 0.5)
+
+fc_10 <- mx.symbol.FullyConnected(data = relu_9, num_hidden = 48)
+relu_10 <- mx.symbol.Dropout(data = fc_10, p = 0.5)
+
+fc_11 <- mx.symbol.FullyConnected(data = relu_10, num_hidden = 32)
+relu_11 <- mx.symbol.Dropout(data = fc_11, p = 0.5)
+
+fc_12 <- mx.symbol.FullyConnected(data = relu_11, num_hidden = 32)
+relu_12 <- mx.symbol.Dropout(data = fc_12, p = 0.5)
+
+fc_13 <- mx.symbol.FullyConnected(data = relu_12, num_hidden = 16)
+relu_13 <- mx.symbol.Dropout(data = fc_13, p = 0.5)
+
+fc_14 <- mx.symbol.FullyConnected(data = relu_13, num_hidden = 3)
+NN_model <- mx.symbol.SoftmaxOutput(data = fc_14)
+
+#-------------------------------------------------------------------------------
+# Pre-training set up
+#-------------------------------------------------------------------------------
+
+# Set seed for reproducibility
+mx.set.seed(100)
+
 #-------------------------------------------------------------------------------
 # Training
 #-------------------------------------------------------------------------------
@@ -176,12 +208,11 @@ model <- mx.model.FeedForward.create(NN_model,
                                      X = train_array,
                                      y = train_y,
                                      ctx = mx.cpu(),
-                                     num.round = 5,
+                                     num.round = 20,
                                      array.batch.size = length(train_y),
                                      learning.rate = 0.1,
                                      momentum = 0.005,
                                      wd = 0.004,
-                                     initializer=mx.init.uniform(0.07),
                                      eval.metric = mx.metric.mlogloss,
                                      batch.end.callback = mx.callback.log.train.metric(10))
 
