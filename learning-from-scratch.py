@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 
 from keras.layers.core import Dense, Dropout, Flatten
-from keras.layers.convolutional import Conv2D, MaxPooling2D
+from keras.layers.convolutional import Conv2D, MaxPooling2D, ZeroPadding2D
 from keras.models import Sequential
+from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
 from multiprocessing import Pool, cpu_count, freeze_support
 from PIL import Image
@@ -23,8 +24,9 @@ TRAIN_IMAGES_FOLDER = "train_extra_resized"
 TEST_IMAGES_FOLDER = "test_resized"
 SIZE = 128
 
-BATCH_SIZE = 20
-NUM_EPOCHS = 50
+
+BATCH_SIZE = 25
+NUM_EPOCHS = 15
 
 
 def im_multi(path):
@@ -69,15 +71,33 @@ def normalize_image_features(paths):
 
 def create_model(opt_='adamax'):
     model = Sequential()
-    model.add(Conv2D(4, (3, 3), activation='relu', data_format='channels_first', input_shape=(3, SIZE, SIZE)))
+    model.add(ZeroPadding2D((1, 1), input_shape=(3, SIZE, SIZE)))
+    model.add(Conv2D(16, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(16, (3, 3), activation='relu', data_format='channels_first'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), data_format='channels_first'))
-    model.add(Conv2D(8, (3, 3), activation='relu', data_format='channels_first'))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(32, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(32, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(32, (3, 3), activation='relu', data_format='channels_first'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), data_format='channels_first'))
-    model.add(Dropout(0.2))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(64, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(64, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(64, (3, 3), activation='relu', data_format='channels_first'))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), data_format='channels_first'))
 
     model.add(Flatten())
-    model.add(Dense(12, activation='tanh'))
-    model.add(Dropout(0.1))
+    model.add(Dense(512, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(512, activation='relu'))
+    model.add(Dropout(0.5))
     model.add(Dense(3, activation='softmax'))
 
     model.compile(optimizer=opt_, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
@@ -138,7 +158,7 @@ def main():
     model = create_model()
     model.fit_generator(generator=datagen.flow(x_train, y_train, shuffle=True),
                         validation_data=(x_val_train, y_val_train),
-                        verbose=2, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
+                        verbose=1, epochs=NUM_EPOCHS, steps_per_epoch=BATCH_SIZE)
 
     print("Predicting...")
     pred = model.predict_proba(test_data)
