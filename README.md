@@ -10,7 +10,7 @@ Repository for Kaggle's competition: "Intel and Mobile ODT Cervical Cancer Scree
 * Using a previously trained neural network
 * Transfer learning/fine tuning
 
-Using OVO or OVA
+Using multiclass classification, OVO and OVA
 
 ### CNNs + others classifiers (SVM, Boosting)
 
