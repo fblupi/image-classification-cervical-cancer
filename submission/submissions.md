@@ -7,5 +7,5 @@
 | 5 | CNN simple learning from scratch con más datos de train (no balanceados) a 128x128 durante 50 épocas | Python, Keras | 0.94097 | 0.8224 | 347 | 8/6/2017 18:35 |
 | 6 | CNN simple learning from scratch con más datos de train (no balanceados) a 128x128 durante 20 épocas | Python, Keras | 0.91071 | 0.8804 | 342 | 8/6/2017 19:16 |
 | 7 | CNN bastante más compleja learning from scratch con más datos de train (no balanceados) a 128x128 durante 15 épocas con un batch size muy grande | Python, Keras | 0.99942 | 1.0444 | 344 | 8/6/2017 22:50 |
-| 8 | CNN simple learning from scratch con más datos de train (no balanceados) a 128x128 durante 10 épocas con un batch size muy pequeño | Python, Keras | 0.87668 | 0.8261 | 282 | 9/6/2017 11:23 |
+| 8 | CNN simple learning from scratch con más datos de train (filtrados y algo más balanceados) a 128x128 durante 10 épocas con un batch size muy pequeño | Python, Keras | 0.87668 | 0.8261 | 282 | 9/6/2017 11:23 |
 | 9 | Primer intento con finetuning en R | R, mxnet | 2.24609 | 1.2871 | 282 | 9/6/2017 11:34 |

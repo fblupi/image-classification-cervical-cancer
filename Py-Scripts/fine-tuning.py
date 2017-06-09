@@ -3,14 +3,24 @@ import glob
 import numpy as np
 import pandas as pd
 
-from keras.layers.core import Dense, Dropout, Flatten
-from keras.layers.convolutional import Conv2D, MaxPooling2D
-from keras.models import Sequential
+from enum import Enum
+from keras.applications.resnet50 import ResNet50
+from keras.applications.vgg16 import VGG16
+from keras.applications.vgg19 import VGG19
+from keras.layers import Dense, GlobalAveragePooling2D
+from keras.models import Model
+from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
 from multiprocessing import Pool, cpu_count, freeze_support
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+
+
+class BaseCNN(Enum):
+    RESNET50 = 0
+    VGG16 = 1
+    VGG19 = 2
 
 SEP = '\\'
 
@@ -19,11 +29,12 @@ SEED = 14
 RESIZE_TRAIN_IMAGES = False
 RESIZE_TEST_IMAGES = False
 
-TRAIN_IMAGES_FOLDER = 'train_resized'
+TRAIN_IMAGES_FOLDER = 'train_extra_mini_resized'
 TEST_IMAGES_FOLDER = 'test_resized'
 SIZE = 224
 
-BATCH_SIZE = 25
+BASE = BaseCNN.RESNET50
+BATCH_SIZE = 15
 NUM_EPOCHS = 10
 
 
@@ -64,21 +75,6 @@ def normalize_image_features(paths):
     fdata = fdata.astype('float32')
     fdata = fdata / 255
     return fdata
-
-
-def create_model(opt_='adamax'):
-    model = Sequential()
-    model.add(Conv2D(4, (3, 3), activation='relu', input_shape=(SIZE, SIZE, 3)))
-    model.add(MaxPooling2D(pool_size=(3, 3), strides=(3, 3)))
-    model.add(Conv2D(8, (3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(3, 3), strides=(3, 3)))
-    model.add(Dropout(0.2))
-    model.add(Flatten())
-    model.add(Dense(12, activation='tanh'))
-    model.add(Dropout(0.1))
-    model.add(Dense(3, activation='softmax'))
-    model.compile(optimizer=opt_, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    return model
 
 
 def main():
@@ -131,14 +127,56 @@ def main():
     datagen = ImageDataGenerator(rotation_range=0.3, zoom_range=0.3)
     datagen.fit(train_data)
 
-    print('Training model...')
-    model = create_model()
+    print('Creating model...')
+    # create the base pre-trained model
+    if BASE == BaseCNN.VGG16:
+        base_model = VGG16(weights='imagenet', include_top=False)
+    elif BASE == BaseCNN.VGG19:
+        base_model = VGG19(weights='imagenet', include_top=False)
+    else:
+        base_model = ResNet50(weights='imagenet', include_top=False)
+
+    # add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    # add a fully-connected layer
+    x = Dense(1024, activation='relu')(x)
+    # add a logistic layer
+    predictions = Dense(3, activation='softmax')(x)
+
+    # create the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    # train only the top layers
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    # compile the model (should be done *after* setting layers to non-trainable)
+    model.compile(optimizer='adamax', loss='sparse_categorical_crossentropy')
+
+    print('Training...')
     model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
                         validation_data=(x_val_train, y_val_train),
                         verbose=1, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
 
+    # print('Preparing second step of train...')
+    # # we chose to train the top 2 inception blocks, i.e. we will freeze
+    # # the first 172 layers and unfreeze the rest
+    # for layer in model.layers[:172]:
+    #     layer.trainable = False
+    # for layer in model.layers[172:]:
+    #     layer.trainable = True
+    #
+    # # we need to recompile the model for these modifications to take effect. We use SGD with a low learning rate
+    # model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), loss='sparse_categorical_crossentropy')
+    #
+    # print('Training...')
+    # model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
+    #                     validation_data=(x_val_train, y_val_train),
+    #                     verbose=1, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
+
     print('Predicting...')
-    pred = model.predict_proba(test_data)
+    pred = model.predict(test_data)
 
     print('Exporting to CSV...')
     df = pd.DataFrame(pred, columns=['Type_1', 'Type_2', 'Type_3'])
