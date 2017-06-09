@@ -86,7 +86,7 @@ def create_model(opt_='adamax'):
 def main():
     if RESIZE_TRAIN_IMAGES:
         print('Reading train data from image files...')
-        train = glob.glob('.' + SEP + 'data' + SEP + TRAIN_IMAGES_FOLDER + SEP + '**' + SEP + '*.jpg')
+        train = glob.glob('..' + SEP + 'data' + SEP + TRAIN_IMAGES_FOLDER + SEP + '**' + SEP + '*.jpg')
         train = pd.DataFrame([[p.split(SEP)[3], p.split(SEP)[4], p] for p in train], columns=['type', 'image', 'path'])
         train = im_stats(train)
         train = train[train['size'] != '0 0'].reset_index(drop=True)
@@ -107,7 +107,7 @@ def main():
 
     if RESIZE_TEST_IMAGES:
         print('Reading test data from image files...')
-        test = glob.glob('.' + SEP + 'data' + SEP + TEST_IMAGES_FOLDER + SEP + '*.jpg')
+        test = glob.glob('..' + SEP + 'data' + SEP + TEST_IMAGES_FOLDER + SEP + '*.jpg')
         test = pd.DataFrame([[p.split(SEP)[3], p] for p in test], columns=['image', 'path'])
         test_data = normalize_image_features(test['path'])
         np.save('.' + SEP + 'npy' + SEP + TEST_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
