@@ -9,3 +9,6 @@
 | 7 | CNN bastante más compleja learning from scratch con más datos de train (no balanceados) a 128x128 durante 15 épocas con un batch size muy grande | Python, Keras | 0.99942 | 1.0444 | 344 | 8/6/2017 22:50 |
 | 8 | CNN simple learning from scratch con más datos de train (filtrados y algo más balanceados) a 128x128 durante 10 épocas con un batch size muy pequeño | Python, Keras | 0.87668 | 0.8261 | 282 | 9/6/2017 11:23 |
 | 9 | Primer intento con finetuning en R | R, mxnet | 2.24609 | 1.2871 | 282 | 9/6/2017 11:34 |
+| 10 | Fine tuning ResNet50 con capa FC de tamaño 1024. Epochs=5, batch size=15 | Python, Keras | 0.91451 | 0.6656 | 288 | 10/6/2017 16:00 |
+| 11 | Fine tuning ResNet50 con capa FC de tamaño 512. Epochs=10, batch size=15 | Python, Keras | 0.84681 | 0.7661 | 250 | 10/6/2017 22:00 |
+| 12 | Fine tuning ResNet50. Epochs=50, batch size=50, sample per epoch=2000 | Python, Keras | score | train_score | pos | 11/6/2017 HH:MM |

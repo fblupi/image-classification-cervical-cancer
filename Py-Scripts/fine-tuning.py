@@ -7,7 +7,7 @@ from enum import Enum
 from keras.applications.resnet50 import ResNet50
 from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
-from keras.layers import Dense, GlobalAveragePooling2D
+from keras.layers import Dense, GlobalAveragePooling2D, Flatten
 from keras.models import Model
 from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
@@ -34,8 +34,9 @@ TEST_IMAGES_FOLDER = 'test_resized'
 SIZE = 224
 
 BASE = BaseCNN.RESNET50
-BATCH_SIZE = 15
-NUM_EPOCHS = 10
+BATCH_SIZE = 50
+NUM_EPOCHS = 50
+SAMPLES_PER_EPOCH = 2000
 
 
 def im_multi(path):
@@ -136,28 +137,25 @@ def main():
     else:
         base_model = ResNet50(weights='imagenet', include_top=False)
 
-    # add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    # add a fully-connected layer
-    x = Dense(1024, activation='relu')(x)
-    # add a logistic layer
-    predictions = Dense(3, activation='softmax')(x)
+    # add a flatten and output layer
+    x = Flatten()(base_model.output)
+    output = Dense(3, activation='softmax')(x)
 
     # create the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
+    model = Model(inputs=base_model.input, outputs=output)
 
     # train only the top layers
     for layer in base_model.layers:
         layer.trainable = False
 
-    # compile the model (should be done *after* setting layers to non-trainable)
+    # compile the model
     model.compile(optimizer='adamax', loss='sparse_categorical_crossentropy')
+    model.summary()
 
     print('Training...')
     model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
                         validation_data=(x_val_train, y_val_train),
-                        verbose=1, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
+                        verbose=1, epochs=NUM_EPOCHS, samples_per_epoch=SAMPLES_PER_EPOCH)
 
     # print('Preparing second step of train...')
     # # we chose to train the top 2 inception blocks, i.e. we will freeze
