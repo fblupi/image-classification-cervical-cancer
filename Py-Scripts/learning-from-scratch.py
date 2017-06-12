@@ -19,11 +19,11 @@ SEED = 14
 RESIZE_TRAIN_IMAGES = False
 RESIZE_TEST_IMAGES = False
 
-TRAIN_IMAGES_FOLDER = 'train_resized'
+TRAIN_IMAGES_FOLDER = 'train_extra_balanced_resized'
 TEST_IMAGES_FOLDER = 'test_resized'
-SIZE = 224
+SIZE = 128
 
-BATCH_SIZE = 25
+BATCH_SIZE = 15
 NUM_EPOCHS = 10
 
 
@@ -125,7 +125,7 @@ def main():
 
     print('Generating validation data...')
     x_train, x_val_train, y_train, y_val_train = train_test_split(train_data, train_target,
-                                                                  test_size=0.25, random_state=SEED)
+                                                                  test_size=0.1, random_state=SEED)
 
     print('Data augmentation...')
     datagen = ImageDataGenerator(rotation_range=0.3, zoom_range=0.3)
@@ -135,7 +135,7 @@ def main():
     model = create_model()
     model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
                         validation_data=(x_val_train, y_val_train),
-                        verbose=1, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
+                        verbose=2, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train))
 
     print('Predicting...')
     pred = model.predict_proba(test_data)

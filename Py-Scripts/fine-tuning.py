@@ -7,9 +7,8 @@ from enum import Enum
 from keras.applications.resnet50 import ResNet50
 from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
-from keras.layers import Dense, GlobalAveragePooling2D, Flatten
+from keras.layers import Dense, GlobalAveragePooling2D
 from keras.models import Model
-from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
 from multiprocessing import Pool, cpu_count, freeze_support
 from PIL import Image
@@ -26,17 +25,16 @@ SEP = '\\'
 
 SEED = 14
 
-RESIZE_TRAIN_IMAGES = False
+RESIZE_TRAIN_IMAGES = True
 RESIZE_TEST_IMAGES = False
 
-TRAIN_IMAGES_FOLDER = 'train_extra_mini_resized'
+TRAIN_IMAGES_FOLDER = 'train_extra_balanced_resized'
 TEST_IMAGES_FOLDER = 'test_resized'
 SIZE = 224
 
 BASE = BaseCNN.RESNET50
-BATCH_SIZE = 50
-NUM_EPOCHS = 50
-SAMPLES_PER_EPOCH = 2000
+BATCH_SIZE = 15
+NUM_EPOCHS = 10
 
 
 def im_multi(path):
@@ -137,8 +135,11 @@ def main():
     else:
         base_model = ResNet50(weights='imagenet', include_top=False)
 
-    # add a flatten and output layer
-    x = Flatten()(base_model.output)
+    # add a global spatial average pooling layer
+    x = GlobalAveragePooling2D()(base_model.output)
+    # add a fully-connected layer
+    x = Dense(512, activation='relu')(x)
+    # add a logistic layer
     output = Dense(3, activation='softmax')(x)
 
     # create the model we will train
@@ -155,23 +156,7 @@ def main():
     print('Training...')
     model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
                         validation_data=(x_val_train, y_val_train),
-                        verbose=1, epochs=NUM_EPOCHS, samples_per_epoch=SAMPLES_PER_EPOCH)
-
-    # print('Preparing second step of train...')
-    # # we chose to train the top 2 inception blocks, i.e. we will freeze
-    # # the first 172 layers and unfreeze the rest
-    # for layer in model.layers[:172]:
-    #     layer.trainable = False
-    # for layer in model.layers[172:]:
-    #     layer.trainable = True
-    #
-    # # we need to recompile the model for these modifications to take effect. We use SGD with a low learning rate
-    # model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), loss='sparse_categorical_crossentropy')
-    #
-    # print('Training...')
-    # model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
-    #                     validation_data=(x_val_train, y_val_train),
-    #                     verbose=1, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
+                        verbose=1, epochs=NUM_EPOCHS, ssteps_per_epoch=len(x_train) / BATCH_SIZE)
 
     print('Predicting...')
     pred = model.predict(test_data)
