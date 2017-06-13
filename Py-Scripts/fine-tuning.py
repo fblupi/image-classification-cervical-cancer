@@ -3,38 +3,32 @@ import glob
 import numpy as np
 import pandas as pd
 
-from enum import Enum
+from datetime import datetime
 from keras.applications.resnet50 import ResNet50
-from keras.applications.vgg16 import VGG16
-from keras.applications.vgg19 import VGG19
-from keras.layers import Dense, GlobalAveragePooling2D
-from keras.models import Model
+from keras.callbacks import ModelCheckpoint
+from keras.layers import Dense, Flatten
+from keras.models import Model, load_model
 from keras.preprocessing.image import ImageDataGenerator
 from multiprocessing import Pool, cpu_count, freeze_support
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-
-class BaseCNN(Enum):
-    RESNET50 = 0
-    VGG16 = 1
-    VGG19 = 2
-
 SEP = '\\'
-
 SEED = 14
+TIME_STAMP = datetime.today().strftime("%d-%m-%Y_%H-%M")
 
-RESIZE_TRAIN_IMAGES = True
+RESIZE_TRAIN_IMAGES = False
 RESIZE_TEST_IMAGES = False
-
 TRAIN_IMAGES_FOLDER = 'train_extra_balanced_resized'
 TEST_IMAGES_FOLDER = 'test_resized'
 SIZE = 224
 
-BASE = BaseCNN.RESNET50
-BATCH_SIZE = 15
-NUM_EPOCHS = 10
+BATCH_SIZE = 64
+NUM_EPOCHS = 150
+
+LOAD_MODEL = False
+MODEL_PATH = ''
 
 
 def im_multi(path):
@@ -74,6 +68,17 @@ def normalize_image_features(paths):
     fdata = fdata.astype('float32')
     fdata = fdata / 255
     return fdata
+
+
+def create_model(opt_='adamax'):
+    base_model = ResNet50(weights='imagenet', include_top=False, input_tensor=None, input_shape=(SIZE, SIZE, 3))
+    x = Flatten()(base_model.output)
+    output = Dense(3, activation='softmax')(x)
+    model = Model(inputs=base_model.input, outputs=output)
+    for layer in model.layers[:len(model.layers) - 1]:
+        layer.trainable = False
+    model.compile(optimizer=opt_, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    return model
 
 
 def main():
@@ -127,36 +132,17 @@ def main():
     datagen.fit(train_data)
 
     print('Creating model...')
-    # create the base pre-trained model
-    if BASE == BaseCNN.VGG16:
-        base_model = VGG16(weights='imagenet', include_top=False)
-    elif BASE == BaseCNN.VGG19:
-        base_model = VGG19(weights='imagenet', include_top=False)
+    if LOAD_MODEL:
+        model = load_model('.' + SEP + 'weights' + SEP + 'fine-tuning' + SEP + MODEL_PATH + '.hdf5')
     else:
-        base_model = ResNet50(weights='imagenet', include_top=False)
-
-    # add a global spatial average pooling layer
-    x = GlobalAveragePooling2D()(base_model.output)
-    # add a fully-connected layer
-    x = Dense(512, activation='relu')(x)
-    # add a logistic layer
-    output = Dense(3, activation='softmax')(x)
-
-    # create the model we will train
-    model = Model(inputs=base_model.input, outputs=output)
-
-    # train only the top layers
-    for layer in base_model.layers:
-        layer.trainable = False
-
-    # compile the model
-    model.compile(optimizer='adamax', loss='sparse_categorical_crossentropy')
-    model.summary()
-
-    print('Training...')
-    model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
-                        validation_data=(x_val_train, y_val_train),
-                        verbose=1, epochs=NUM_EPOCHS, ssteps_per_epoch=len(x_train) / BATCH_SIZE)
+        model = create_model()
+        print('Training...')
+        checkpoint = ModelCheckpoint('.' + SEP + 'weights' + SEP + 'fine-tuning' + SEP + TIME_STAMP
+                                     + "-epoch{epoch:02d}-val_loss{val_loss:.4f}" + '.hdf5',
+                                     monitor='val_loss', save_best_only=False)
+        model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
+                            validation_data=(x_val_train, y_val_train), callbacks=[checkpoint],
+                            verbose=1, epochs=NUM_EPOCHS, samples_per_epoch=2048)
 
     print('Predicting...')
     pred = model.predict(test_data)

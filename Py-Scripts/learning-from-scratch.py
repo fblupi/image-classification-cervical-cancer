@@ -3,9 +3,11 @@ import glob
 import numpy as np
 import pandas as pd
 
+from datetime import datetime
+from keras.callbacks import ModelCheckpoint
 from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers.convolutional import Conv2D, MaxPooling2D
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.preprocessing.image import ImageDataGenerator
 from multiprocessing import Pool, cpu_count, freeze_support
 from PIL import Image
@@ -13,18 +15,20 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 SEP = '\\'
-
 SEED = 14
+TIME_STAMP = datetime.today().strftime("%d-%m-%Y_%H-%M")
 
 RESIZE_TRAIN_IMAGES = False
 RESIZE_TEST_IMAGES = False
-
 TRAIN_IMAGES_FOLDER = 'train_extra_balanced_resized'
 TEST_IMAGES_FOLDER = 'test_resized'
 SIZE = 128
 
 BATCH_SIZE = 15
 NUM_EPOCHS = 10
+
+LOAD_MODEL = True
+MODEL_PATH = '13-06-2017_11-59-epoch09-val_loss1.0082'
 
 
 def im_multi(path):
@@ -132,10 +136,16 @@ def main():
     datagen.fit(train_data)
 
     print('Training model...')
-    model = create_model()
-    model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
-                        validation_data=(x_val_train, y_val_train),
-                        verbose=2, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train))
+    if LOAD_MODEL:
+        model = load_model('.' + SEP + 'weights' + SEP + 'learning-from-scratch' + SEP + MODEL_PATH + '.hdf5')
+    else:
+        model = create_model()
+        checkpoint = ModelCheckpoint('.' + SEP + 'weights' + SEP + 'learning-from-scratch' + SEP + TIME_STAMP
+                                     + "-epoch{epoch:02d}-val_loss{val_loss:.4f}" + '.hdf5',
+                                     monitor='val_loss', save_best_only=False)
+        model.fit_generator(generator=datagen.flow(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True),
+                            validation_data=(x_val_train, y_val_train), callbacks=[checkpoint],
+                            verbose=2, epochs=NUM_EPOCHS, steps_per_epoch=len(x_train) / BATCH_SIZE)
 
     print('Predicting...')
     pred = model.predict_proba(test_data)

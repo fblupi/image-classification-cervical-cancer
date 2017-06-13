@@ -36,3 +36,4 @@ data/
 rds/
 npy/
 .idea/
+weights/
