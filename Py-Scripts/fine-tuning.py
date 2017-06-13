@@ -27,8 +27,8 @@ SIZE = 224
 BATCH_SIZE = 64
 NUM_EPOCHS = 150
 
-LOAD_MODEL = False
-MODEL_PATH = ''
+LOAD_MODEL = True
+MODEL_PATH = '13-06-2017_20-54-epoch64-val_loss0.8993'
 
 
 def im_multi(path):
@@ -82,26 +82,27 @@ def create_model(opt_='adamax'):
 
 
 def main():
-    if RESIZE_TRAIN_IMAGES:
-        print('Reading train data from image files...')
-        train = glob.glob('..' + SEP + 'data' + SEP + TRAIN_IMAGES_FOLDER + SEP + '**' + SEP + '*.jpg')
-        train = pd.DataFrame([[p.split(SEP)[3], p.split(SEP)[4], p] for p in train], columns=['type', 'image', 'path'])
-        train = im_stats(train)
-        train = train[train['size'] != '0 0'].reset_index(drop=True)
-        train_data = normalize_image_features(train['path'])
-        np.save('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
-                train_data, allow_pickle=True, fix_imports=True)
+    if not LOAD_MODEL:
+        if RESIZE_TRAIN_IMAGES:
+            print('Reading train data from image files...')
+            train = glob.glob('..' + SEP + 'data' + SEP + TRAIN_IMAGES_FOLDER + SEP + '**' + SEP + '*.jpg')
+            train = pd.DataFrame([[p.split(SEP)[3], p.split(SEP)[4], p] for p in train], columns=['type', 'image', 'path'])
+            train = im_stats(train)
+            train = train[train['size'] != '0 0'].reset_index(drop=True)
+            train_data = normalize_image_features(train['path'])
+            np.save('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
+                    train_data, allow_pickle=True, fix_imports=True)
 
-        le = LabelEncoder()
-        train_target = le.fit_transform(train['type'].values)
-        np.save('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '-target.npy',
-                train_target, allow_pickle=True, fix_imports=True)
-    else:
-        print('Reading train data from NPY files...')
-        train_data = np.load('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
-                             allow_pickle=True, fix_imports=True)
-        train_target = np.load('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '-target.npy',
-                               allow_pickle=True, fix_imports=True)
+            le = LabelEncoder()
+            train_target = le.fit_transform(train['type'].values)
+            np.save('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '-target.npy',
+                    train_target, allow_pickle=True, fix_imports=True)
+        else:
+            print('Reading train data from NPY files...')
+            train_data = np.load('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '.npy',
+                                 allow_pickle=True, fix_imports=True)
+            train_target = np.load('.' + SEP + 'npy' + SEP + TRAIN_IMAGES_FOLDER + '-' + str(SIZE) + '-target.npy',
+                                   allow_pickle=True, fix_imports=True)
 
     if RESIZE_TEST_IMAGES:
         print('Reading test data from image files...')
@@ -121,20 +122,20 @@ def main():
         test_id = np.load('.' + SEP + 'npy' + SEP + TEST_IMAGES_FOLDER + '-' + str(SIZE) + '-label.npy',
                           allow_pickle=True, fix_imports=True)
 
-    np.random.seed(SEED)  # for reproducibility
-
-    print('Generating validation data...')
-    x_train, x_val_train, y_train, y_val_train = train_test_split(train_data, train_target,
-                                                                  test_size=0.25, random_state=SEED)
-
-    print('Data augmentation...')
-    datagen = ImageDataGenerator(rotation_range=0.3, zoom_range=0.3)
-    datagen.fit(train_data)
-
     print('Creating model...')
     if LOAD_MODEL:
         model = load_model('.' + SEP + 'weights' + SEP + 'fine-tuning' + SEP + MODEL_PATH + '.hdf5')
     else:
+        np.random.seed(SEED)  # for reproducibility
+
+        print('Generating validation data...')
+        x_train, x_val_train, y_train, y_val_train = train_test_split(train_data, train_target,
+                                                                      test_size=0.25, random_state=SEED)
+
+        print('Data augmentation...')
+        datagen = ImageDataGenerator(rotation_range=0.3, zoom_range=0.3)
+        datagen.fit(train_data)
+
         model = create_model()
         print('Training...')
         checkpoint = ModelCheckpoint('.' + SEP + 'weights' + SEP + 'fine-tuning' + SEP + TIME_STAMP
@@ -150,7 +151,7 @@ def main():
     print('Exporting to CSV...')
     df = pd.DataFrame(pred, columns=['Type_1', 'Type_2', 'Type_3'])
     df['image_name'] = test_id
-    df.to_csv('submission.csv', index=False)
+    df.to_csv('20.csv', index=False)
 
 
 if __name__ == '__main__':
