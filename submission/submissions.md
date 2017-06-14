@@ -20,3 +20,8 @@
 | 18 | Fine tuning ResNet50. Epochs=100, batch size=32, sample per epoch=2000 | Python, Keras | 0.95160 | 0.7130 | 259 | 13/6/2017 21:52 |
 | 19 | Fine tuning ResNet50. Epochs=125, batch size=32, sample per epoch=2000 | Python, Keras | 0.96648 | 0.6980 | 259 | 13/6/2017 21:53 |
 | 20 | Fine tuning ResNet50. Epochs=75, batch size=48, sample per epoch=2000 | Python, Keras | 0.9170 | 0.7135 | 259 | 13/6/2017 22:11 |
+| 21 | Fine tuning ResNet50con capa FC de tamaño 512. Epochs=75, batch size=48, sample per epoch=2000 | Python, Keras | 0.85543 | 0.3170 | 259 | 14/6/2017 11:20 |
+| 22 | Fine tuning ResNet50con capa FC de tamaño 512. Epochs=70, batch size=48, sample per epoch=2000 | Python, Keras | 0.85133 | 0.3699 | 259 | 14/6/2017 11:25 |
+| 23 | Fine tuning ResNet50con capa FC de tamaño 512. Epochs=50, batch size=48, sample per epoch=2000 | Python, Keras | 0.82368 | 0.5239 | 229 | 14/6/2017 11:30 |
+| 24 | Fine tuning ResNet50con capa FC de tamaño 512. Epochs=60, batch size=48, sample per epoch=2000 | Python, Keras | 0.80378 | 0.4498 | 195 | 14/6/2017 11:35 |
+| 25 | Fine tuning ResNet50con capa FC de tamaño 512. Epochs=65, batch size=48, sample per epoch=2000 | Python, Keras | 0.83104 | 0.4193 | 195 | 14/6/2017 11:40 |
